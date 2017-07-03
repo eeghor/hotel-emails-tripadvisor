@@ -41,7 +41,7 @@ except:
 		print(a.text)
 		hotel_url_lst.append(a.get_attribute("href"))
 		hotel_name_lst.append(a.text)
-		time.sleep(1)
+		time.sleep(3)
 
 for i, url in enumerate(hotel_url_lst):
 	
@@ -85,7 +85,8 @@ for i, url in enumerate(hotel_url_lst):
 			hotel_website = None
 	
 		print("web site: ", hotel_website)
-	
+
+		hotel_main_window = driver.current_window_handle
 		# now check if there's an option to email the hotel
 		try:
 			WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "email"))).click()
@@ -93,12 +94,17 @@ for i, url in enumerate(hotel_url_lst):
 			for h in driver.window_handles:
 				if h != hotel_main_window:
 					driver.switch_to_window(h)
+					time.sleep(5)
 					# look for a imput that has id receiver
-					inp = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.ID, "receiver")))
-					hotel_email = inp.text
-					print("found input!")
+					try:
+						for inp in driver.find_elements_by_name("receiver"):
+							print("found receivers:", inp)
+						hotel_email = inp.text
+						print("found input!")
+					except:
+						pass
 					driver.close()
-					driver.switch_to_window(hotel_main_window)
+					driver.switch_to_default_content()
 		except:
 			hotel_email = None
 	
