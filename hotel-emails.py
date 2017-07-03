@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import Select  # to deal with dropdown menues
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 import time
+import re
 from selenium.common.exceptions import NoSuchElementException
 import pandas as pd
 from collections import defaultdict, namedtuple
@@ -35,55 +36,76 @@ try:
 except:
 	print("1 not clickable, so we are on page 1 already")
 	# find hotel list placement
-	div_hotels_cell = driver.find_element_by_xpath("//div[@class='hotels_list_placement']")
-	for a in div_hotels_cell.find_elements_by_xpath(".//a[@class='property_title']"):
+	# div_hotels_cell = driver.find_element_by_xpath("//div[@class='hotels_list_placement']")
+	for a in driver.find_elements_by_xpath(".//a[@class='property_title']"):
 		print(a.text)
 		hotel_url_lst.append(a.get_attribute("href"))
 		hotel_name_lst.append(a.text)
+		time.sleep(1)
 
-for i, url in enumerate(hotel_url_lst[:3]):
+for i, url in enumerate(hotel_url_lst):
 	
-	print("hotel: ", hotel_name_lst[i])
-
-	driver.get(url)
-	hotel_main_window = driver.current_window_handle
-
-	hotel_address = []
-
-	try:
-		span_address = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "street-address")))
-		hotel_address.append(span_address.text)
-	except:
-		print("cannot find street address..")
-	try:
-		span_locality = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "locality")))
-		hotel_address.append(span_locality.text)
-	except:
-		print("cannot find localty..")
-	try:
-		span_country = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "country-name")))
-		hotel_address.append(span_country.text)
-	except:
-		print("cannot find country..")
-
-	print("address: ", " ".join(hotel_address))
-
-	# see if there's a list to the hotel's website
-	try:
-		WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "website"))).click()
-		for h in driver.window_handles:
-			if h != hotel_main_window:
-				driver.switch_to_window(handle)
-				hotel_website = driver.current_url
-				driver.close()
-
-	except:
-		hotel_website = None
-
-	print("web site: ", hotel_website)
-
-	# for handle in driver.window_handles:
-	# 	if handle != original_window_handla:
+	if hotel_name_lst[i] == "Ovolo 1888 Darling Harbour":
+		print("hotel: ", hotel_name_lst[i])
+	
+		driver.get(url)
+		hotel_main_window = driver.current_window_handle
+	
+		hotel_address = []
+	
+		try:
+			span_address = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "street-address")))
+			hotel_address.append(span_address.text)
+		except:
+			print("cannot find street address..")
+		try:
+			span_locality = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "locality")))
+			hotel_address.append(span_locality.text)
+		except:
+			print("cannot find localty..")
+		try:
+			span_country = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "country-name")))
+			hotel_address.append(span_country.text)
+		except:
+			print("cannot find country..")
+	
+		print("address: ", " ".join(hotel_address))
+	
+		# see if there's a list to the hotel's website
+		try:
+			WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "website"))).click()
+			for h in driver.window_handles:
+				if h != hotel_main_window:
+					driver.switch_to_window(h)
+					hotel_website = driver.current_url.split("//")[1].split("/")[0]
+					driver.close()
+					driver.switch_to_window(hotel_main_window)
+	
+		except:
+			hotel_website = None
+	
+		print("web site: ", hotel_website)
+	
+		# now check if there's an option to email the hotel
+		try:
+			WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "email"))).click()
+			print("clicked send email")
+			for h in driver.window_handles:
+				if h != hotel_main_window:
+					driver.switch_to_window(h)
+					# look for a imput that has id receiver
+					inp = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.ID, "receiver")))
+					hotel_email = inp.text
+					print("found input!")
+					driver.close()
+					driver.switch_to_window(hotel_main_window)
+		except:
+			hotel_email = None
+	
+		print("email: ", hotel_email)
+	
+		# for handle in driver.window_handles:
+		# 	if handle != original_window_handla:
 	# 		driver.switch_to_window(handle)
 	# 		print("now at ", driver.current_url)
 	
