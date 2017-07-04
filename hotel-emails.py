@@ -1,213 +1,201 @@
 import selenium
 from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support.ui import Select  # to deal with dropdown menues
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 import time
-import re
-from selenium.common.exceptions import NoSuchElementException
+import sys
 import pandas as pd
 from collections import defaultdict, namedtuple
-from datetime import datetime, date # need to convert timezone
 
-WAIT_TIME = 40
-BASE_REVIEW_URL = "http://tripadvisor.com.au/"
-#driver = webdriver.PhantomJS()
+# full path to the webdriver to use; use webdriver.PhantomJS() for invisible browsing
 driver = webdriver.Chrome('/Users/ik/Codes/hotel-emails-tripadvisor/webdriver/chromedriver')
-
-RNK_PAGE_CNT = 1
-
-wtapl = []
-
+# default waiting time
+WAIT_TIME = 40
+# base URL
+BASE_REVIEW_URL = "http://tripadvisor.com.au/"
+# page to go to first
 start_page  = "https://www.tripadvisor.com.au/Best-Hotels-Sydney.html"
 driver.get(start_page)
+time.sleep(5)
 
-Hotel = namedtuple("Hotel", "name address website email")
+def _how_many_pages_on_pagination_bar():
+	"""
+	locate the pagination bar at the bottom of the current page and find how many pages are there
+	"""
+	all_possible_bar_divs = driver.find_elements_by_xpath("//div[contains(@class,'unified') and contains(@class, 'standard_pagination')]")
+	max_page = None
+	time.sleep(3)
+	if all_possible_bar_divs:
+		for located_div in all_possible_bar_divs:
+			try:
+				max_page = int(located_div.get_attribute("data-numpages"))
+				break  # no need to keep looking
+			except:
+				continue
+		if max_page:
+			return max_page
+		else:
+			print("[ERROR]: can't find max page on the pagination bar at the bottom...")
+			sys.exit(0)
+	else:
+		print("[ERROR]: can't locate the pagination bar at the bottom...")
+		sys.exit(0)
 
-hotel_name_lst = []
-hotel_url_lst = []
-
+# pagination bar at the bottom of the page
 pagination_bar = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
 
-try:
-	pagination_bar.find_element_by_xpath("span[@data-page-number='1']").click()
-	print("clicked")
-except:
-	print("1 not clickable, so we are on page 1 already")
-	# find hotel list placement
-	# div_hotels_cell = driver.find_element_by_xpath("//div[@class='hotels_list_placement']")
-	for a in driver.find_elements_by_xpath(".//a[@class='property_title']"):
-		print(a.text)
-		hotel_url_lst.append(a.get_attribute("href"))
-		hotel_name_lst.append(a.text)
-		time.sleep(3)
+max_page = _how_many_pages_on_pagination_bar()
 
-for i, url in enumerate(hotel_url_lst):
-	
-	if hotel_name_lst[i] == "Ovolo 1888 Darling Harbour":
-		print("hotel: ", hotel_name_lst[i])
-	
+print("[pagination bar]: available pages to visit: {}".format(max_page))
+
+
+# start visiting pages
+
+for page in range(1, max_page + 1):
+
+	print("page {}".format(page))
+
+	# first simply find that button
+	# pagination bar at the bottom of the page
+	pagination_bar = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
+	try:
+		page_button = pagination_bar.find_element_by_xpath("span[@data-page-number='" + str(page) + "']")
+	except:
+		try:
+			page_button = pagination_bar.find_element_by_xpath(".//a[@data-page-number='" + str(page) + "']")
+		except:
+			print("[ERROR]: unable to find page {} button on the pagination bar!".format(page))
+			sys.exit(0)
+
+	#  if got to here, the button has been found; but it is clickable?
+	try:
+		time.sleep(3)
+		page_button.click()
+	except:
+		# give a warning but assume that it's because we are already on the page we need
+		print("[WARNING]: page button on the pagination bar is not clickable...")
+
+	# create a hotel url list for the hotels on this page
+	hname_lst = []
+	hurl_lst = []
+	hwebs_lst = []
+	haddr_lst = []
+	hemail_lst = []
+	# can we find any hotels on this page at all?
+	hrefs_on_page = driver.find_elements_by_xpath(".//a[@class='property_title']")
+
+	if not hrefs_on_page:
+		print("[ERROR]: cannot find any hotel links on this page...")
+		sys.exit(0)
+	else:
+		for a in hrefs_on_page:
+			hname_lst.append(a.text.lower().strip())
+			hurl_lst.append(a.get_attribute("href"))
+
+	print("found {} hotels on this page...".format(len(hname_lst)))
+
+	for i, url in enumerate(hurl_lst[:2]):
+
+		print("hotel {}/{}: {}".format(i + 1, len(hname_lst), hname_lst[i]))
+		print("url: {}".format(url))
+
 		driver.get(url)
-		hotel_main_window = driver.current_window_handle
-	
+		time.sleep(5)
+		# hotel main page handle
+		hmain_h = driver.current_window_handle
+
+		#  a d d r e s s
+
 		hotel_address = []
-	
+
 		try:
 			span_address = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "street-address")))
-			hotel_address.append(span_address.text)
+			hotel_address.append(span_address.text.lower().strip())
 		except:
-			print("cannot find street address..")
+			print("[WARNING]: cannot find street address for {}..".format(hname_lst[i]))
 		try:
 			span_locality = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "locality")))
-			hotel_address.append(span_locality.text)
+			hotel_address.append(span_locality.text.lower().strip())
 		except:
-			print("cannot find localty..")
+			print("[WARNING]: cannot find localty for {}..".format(hname_lst[i]))
 		try:
 			span_country = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "country-name")))
-			hotel_address.append(span_country.text)
+			hotel_address.append(span_country.text.lower().strip())
 		except:
-			print("cannot find country..")
-	
-		print("address: ", " ".join(hotel_address))
-	
-		# see if there's a list to the hotel's website
+			print("[WARNING]: cannot find country for {}..".format(hname_lst[i]))
+
+		haddr_lst.append(" ".join(hotel_address))
+
+		print("address: {}".format(haddr_lst[-1]))
+
+		# w e b s i t e
+
+		# see if there's a link to the hotel's website; if there is, click
 		try:
 			WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "website"))).click()
+			time.sleep(5)   # give it 5 sec to load
+			# the website is supposed to start loading in a new window
 			for h in driver.window_handles:
-				if h != hotel_main_window:
+				if h != hmain_h:
 					driver.switch_to_window(h)
-					hotel_website = driver.current_url.split("//")[1].split("/")[0]
+					hwebs_lst.append(driver.current_url.split("//")[1].split("/")[0].lower().strip())
 					driver.close()
-					driver.switch_to_window(hotel_main_window)
-	
+					driver.switch_to_window(hmain_h)
 		except:
-			hotel_website = None
-	
-		print("web site: ", hotel_website)
+			hwebs_lst.append(None)
 
-		hotel_main_window = driver.current_window_handle
-		# now check if there's an option to email the hotel
+		print("website: {}".format(hwebs_lst[-1]))
+
+		# hotel main page handle again
+		hmain_h = driver.current_window_handle
+
+		# e m a i l
+
+		# check if there's an option to email the hotel
+
 		try:
-			WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "email"))).click()
-			print("clicked send email")
-			for h in driver.window_handles:
-				if h != hotel_main_window:
-					driver.switch_to_window(h)
-					time.sleep(5)
-					# look for a imput that has id receiver
-					try:
-						for inp in driver.find_elements_by_name("receiver"):
-							print("found receivers:", inp)
-						hotel_email = inp.text
-						print("found input!")
-					except:
-						pass
-					driver.close()
-					driver.switch_to_default_content()
+			email_hotel_option = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "email")))
 		except:
-			hotel_email = None
-	
-		print("email: ", hotel_email)
-	
-		# for handle in driver.window_handles:
-		# 	if handle != original_window_handla:
-	# 		driver.switch_to_window(handle)
-	# 		print("now at ", driver.current_url)
-	
-	# driver.switch_to_window(original_window_handla)
-	
-	# try:
-	# 	click_span_email = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "email")))
-	# 	print("email=", click_span_email.text)
-	# 	click_span_email.click()
-	
-	# 	for handle in driver.window_handles:
-	# 		if handle != original_window_handla:
-	# 			driver.switch_to_window(handle)
-	# 			div_email = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.NAME, "receiver")))
-	# 			print("email addr=", div_email.text)
-	# except:
-	# 	pass
+			print("[WARNING]: can't find the email hotel option...")
+			hemail_lst.append(None)
+			continue
+		try:
+			email_hotel_option.click()
+			time.sleep(3)
+		except:
+			print("[ERROR]: cannot click on the email option...")
+			sys.exit(0)
+
+		hotel_email = None
+
+		try:
+			alert = driver.switch_to.alert
+		except:
+			print("[ERROR]: cannot switch to alert!")
+			sys.exit(0)
+
+		# if got here, the switch to alert went well
+		inps = driver.find_elements(By.XPATH, "//input[@id='receiver']")
+		if not inps:
+			print("[ERROR]: cannot find any suitable inputs!")
+			sys.exit(0)
+		else:
+			for inp in inps:
+				try:
+					hotel_email = inp.get_attribute("value").lower().strip()
+					hemail_lst.append(hotel_email)
+					alert.dismiss()
+					break
+				except:
+					print("[ERROR]: cannot pick the vaue of email input!")
+					hemail_lst.append(None)
+					sys.exit(0)
+
+			print("email: {}".format(hemail_lst[-1]))
 
 
-
-
-# for n, a in enumerate(driver.find_elements_by_xpath("//a[@class='property_title']")):
-# 	try:
-# 		gota = a.get_attribute("href")
-# 		hotel_url_lst.append(gota)
-# 		hotel_name_lst.append(a.text)
-# 	except:
-# 		continue
-# 	if n == 2:
-# 		break
-
-# print(hotel_name_lst)
-# print(hotel_url_lst)
-
-# print("going to hotel pages...", hotel_url_lst[-1])
-# driver.get(hotel_url_lst[-1])
-
-
-# # start visiting hotel pages
-# for hotel, url in zip(hotel_name_lst, hotel_url_lst):
-# 	print("trying url=", url)
-# 	driver.get(url)
-# 	time.sleep(5)
-# 	# 	# find tha email hotel thing
-# 	try:
-# 		email_hotel = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT, "E-mail")))
-# 		# main_window_handle = driver.current_window_handle
-# 		print("email hotel=", email_hotel)
-# 		# # main_window_handle = driver.current_window_handle
-# 		# email_hotel.click()
-# 		# for handle in driver.window_handles:
-# 		# 	if handle != main_window_handle:
-# 		# 		driver.switch_to.window(handle)
-# 		# 		try:
-# 		# 			hotel_email = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.ID, "receiver"))).text
-# 		# 			print(hotel_email)
-# 		# 		except:
-# 		# 			print("this hotel has not email")
-# 	except:
-# 		driver.close()
-# 		continue
-# 	# driver.close()
-
-
-
-# 	# find all rows
-# 	rows = ranking_table.find_elements_by_xpath(".//tbody/tr")
-	
-# 	for row in rows:
-
-# 		# find all cells, i.e. <td>s
-# 		clls = row.find_elements_by_xpath(".//td[contains(@class, 'mobile') and contains(@class, 'center')]")
-
-# 		wtapl.append(WTA_Player(crank=clls[0].text.strip(), 
-# 			country=clls[1].find_element_by_xpath(".//span[contains(@class, 'hide')]").text.strip().capitalize(),
-# 			name=row.find_element_by_xpath(".//td/a[@class='pink']").text.split(",")[1].strip().capitalize(),
-# 			surname=row.find_element_by_xpath(".//td/a[@class='pink']").text.split(",")[0].strip().capitalize(),
-# 			# on the page, DOBs are listed as, for example, 12 FEB 1992, i.e. %d %b %Y
-# 			dob=datetime.strptime(row.find_element_by_xpath(".//td[contains(@class,'hide')]").text.strip(), "%d %b %Y").strftime("%d-%b-%Y")))
-	
-# 	print("ranks collected so far: {}".format(len(wtapl)))
-# 	# go to the next ranking page via the menu
-# 	Select(WebDriverWait(driver, WAIT_TIME).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".rankings-rank-change")))).select_by_value(str(RNK_PAGE_CNT))
+		# handles = driver.window_handles
+		# driver.switch_to_window(handles[0])
 
 driver.quit()
-
-# end_time = time.time()
-
-# print("done. collected {} ranks.".format(len(wtapl)))
-# print("elapsed time: {} min".format(round((end_time - start_time)/60, 1)))
-
-# df = pd.DataFrame(wtapl)
-
-# csv_fl = "wta_ranking_" + date.today().strftime("%d%b%Y") +".csv"
-
-# df.to_csv(csv_fl, index=False, sep="\t")
-
-# print("saved everything in the file called {} in your local directory".format(csv_fl))
-
