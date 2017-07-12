@@ -10,7 +10,8 @@ import pandas as pd
 
 list_places = ["Sydney", "Melbourne", "Brisbane", "Perth", "Adelaide", "Hobart", "Canberra", "Darwin"]
 # full path to the webdriver to use; use webdriver.PhantomJS() for invisible browsing
-driver = webdriver.Chrome('/Users/ik/Codes/hotel-emails-tripadvisor/webdriver/chromedriver')
+#driver = webdriver.Chrome('/Users/ik/Codes/hotel-emails-tripadvisor/webdriver/chromedriver')
+driver = webdriver.PhantomJS('/Users/ik/Codes/hotel-emails-tripadvisor/webdriver/phantomjs')
 # default waiting time
 WAIT_TIME = 20
 # base URL
@@ -81,17 +82,20 @@ def _get_website():
 	except:
 		return None
 
-for place in list_places:
+for place in list_places[:1]:
+
+	print("collecting {} hotels..".format(place))
 
 	driver.get(start_page)  # the Hotels page
 	time.sleep(5)
 	# find the input and type in the place names
 	driver.find_element_by_class_name("typeahead_input").send_keys(place)
 	# find the find hotels button
-	driver.find_element_by_class_name("submit_text").click()
-	time.sleep(3)
+	WebDriverWait(driver, 120).until(EC.element_to_be_clickable((By.CLASS_NAME, "submit_text"))).click()
+	#driver.find_element_by_class_name("submit_text").click()
+	time.sleep(5)
 	# pagination bar at the bottom of the page
-	pagination_bar = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
+	pagination_bar = WebDriverWait(driver, 120).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
 	driver.switch_to_window(driver.window_handles[0])
 
 	max_page = _how_many_pages_on_pagination_bar()
@@ -109,22 +113,30 @@ for place in list_places:
 		pagination_bar = WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
 
 		try:
-			page_button = pagination_bar.find_element_by_xpath("span[@data-page-number='" + str(page) + "']")
-			time.sleep(3)
+			page_button = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, 
+				"//span[@data-page-number='" + str(page) + "']")))
+			#page_button = pagination_bar.find_element_by_xpath("span[@data-page-number='" + str(page) + "']")
+			#time.sleep(3)
 		except:
 			try:
-				page_button = pagination_bar.find_element_by_xpath("a[@data-page-number='" + str(page) + "']")
+				#time.sleep(3)
+				#page_button = pagination_bar.find_element_by_xpath("a[@data-page-number='" + str(page) + "']")
+				page_button = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, 
+				"//a[@data-page-number='" + str(page) + "']")))
 			except:
 				print("[ERROR]: unable to find page {} button on the pagination bar!".format(page))
 				sys.exit(0)
 
 		#  if got to here, the button has been found; but it is clickable?
-		try:
-			time.sleep(3)
-			page_button.click()
-		except:
-			# give a warning but assume that it's because we are already on the page we need
-			print("[WARNING]: page button on the pagination bar is not clickable...")
+		if page < max_page:
+			try:
+				time.sleep(3)
+				page_button.click()
+			except:
+				# give a warning but assume that it's because we are already on the page we need
+				print("[WARNING]: page button on the pagination bar is not clickable...")
+		else:
+			pass
 
 		# create a hotel url list for the hotels on this page
 		hname_lst = []
@@ -134,21 +146,45 @@ for place in list_places:
 		hemail_lst = []
 
 		time.sleep(3)
-		driver.switch_to_window(driver.window_handles[0])
-		# can we find any hotels on this page at all?
-		hrefs_on_page = driver.find_elements_by_xpath(".//a[@class='property_title']")
 
-		if not hrefs_on_page:
-			print("[ERROR]: cannot find any hotel links on this page...")
-			sys.exit(0)
-		else:
-			for a in hrefs_on_page:
-				hname_lst.append(a.text.lower().strip())
-				hurl_lst.append(a.get_attribute("href"))
+		driver.switch_to_window(driver.window_handles[0])
+		time.sleep(6)
+		all_property_ids = [e.get_attribute("id") for e in driver.find_elements_by_xpath("//a[contains(@id, 'property_')]")]
+		#print(all_property_ids)
+		# time.sleep(5)
+		# # can we find any hotels on this page at all?
+
+		#driver.switch_to_window(driver.window_handles[0])
+		#hrefs_on_page = driver.find_elements_by_xpath(".//a[@class='property_title']")
+
+		# hrefs_on_page = WebDriverWait(driver, 40).until(EC.presence_of_all_elements_located((By.CLASS_NAME, "property_title")))
+		# time.sleep(3)
+		# hrefs_on_page = WebDriverWait(driver, 40).until(EC.presence_of_all_elements_located((By.CLASS_NAME, "property_title")))
+		for i in all_property_ids:
+			#print(i)
+			try:
+				hname_lst.append(WebDriverWait(driver, 200).until(EC.presence_of_element_located((By.ID, i))).text)
+			except:
+				#time.sleep(5)
+				hname_lst.append(WebDriverWait(driver, 200).until(EC.presence_of_element_located((By.ID, i))).text)
+			try:
+				hurl_lst.append(WebDriverWait(driver, 200).until(EC.presence_of_element_located((By.ID, i))).get_attribute("href"))
+			except:
+				#time.sleep(5)
+				hurl_lst.append(WebDriverWait(driver, 200).until(EC.presence_of_element_located((By.ID, i))).get_attribute("href"))
+
+		# if not hrefs_on_page:
+		# 	print("[ERROR]: cannot find any hotel links on this page...")
+		# 	sys.exit(0)
+		# else:
+			# for a in hrefs_on_page:
+				#time.sleep(5)
+			#hname_lst.append(a.text.lower().strip())
+			#hurl_lst.append(a.get_attribute("href"))
 
 		print("found {} hotels on this page...".format(len(hname_lst)))
 
-		for i, url in enumerate(hurl_lst[:2]):
+		for i, url in enumerate(hurl_lst):
 
 			print("hotel {}/{}: {}".format(i + 1, len(hname_lst), hname_lst[i]))
 			print("url: {}".format(url))
@@ -211,3 +247,5 @@ for place in list_places:
 						sys.exit(0)
 
 driver.quit()
+
+pd.DataFrame({"name": hname_lst, "address": haddr_lst, "website": hwebs_lst, "email": hemail_lst}).to_csv("hotel_data.csv", index=False)
