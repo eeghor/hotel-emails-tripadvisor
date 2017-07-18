@@ -9,7 +9,7 @@ import sys
 import pandas as pd
 from collections import namedtuple
 
-list_places = ["Sydney"]
+list_places = ["alice springs"]
 # full path to the webdriver to use; use webdriver.PhantomJS() for invisible browsing
 #driver = webdriver.Chrome('/Users/ik/Codes/hotel-emails-tripadvisor/webdriver/chromedriver')
 driver = webdriver.PhantomJS('/Users/ik/Codes/hotel-emails-tripadvisor/webdriver/phantomjs')
