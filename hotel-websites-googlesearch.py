@@ -9,7 +9,7 @@ from unidecode import unidecode
 import pandas as pd
 from selenium.webdriver.common.action_chains import ActionChains
 
-DATA_DIR = "~/Data/"
+DATA_DIR = "C:/Users/igork/Data/"
 
 # read the hotel file
 hotels = pd.read_csv(DATA_DIR + "hotels/australian_hotels.csv", sep="\t", dtype=str)
@@ -60,7 +60,7 @@ for i, row in enumerate(hotels_nowebsite.itertuples()):
 		continue
 	
 	time.sleep(2)
-	website = driver.current_url.split("/")[0].split("//")[-1]
+	website = driver.current_url
 	ws_list.append(website)
 	driver.execute_script("window.history.go(-1)")
 	time.sleep(1)
