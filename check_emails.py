@@ -24,14 +24,14 @@ email_status = []
 cgood = 0
 cbad = 0
 
-for i, email_part in enumerate(emails):
+for i, email_part in enumerate(emails[5200:]):
 	
 	email_lst.append(email_part)
 	cand_urls = [pr1 + pr2 + email_part for pr1 in pref1 for pr2 in pref2]
 	ff = False
 	for url in cand_urls:
 		try:
-			r = requests.get(url)
+			r = requests.get(url, timeout=10)
 			# if request returned something
 			if r.status_code in [200, 301]:   # 200 = OK, 301 = redirection
 				email_status.append("ok")
